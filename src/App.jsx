@@ -19,7 +19,10 @@ import {
 } from "./components/SalesCharts.jsx";
 import { InfoModal } from "./components/InfoModal.jsx";
 
+const STORE_NAME = "GreenCart POS";
+
 const NAV = [
+  { id: "login", label: "Login" },
   { id: "dashboard", label: "Dashboard" },
   { id: "pos", label: "POS Terminal" },
   { id: "products", label: "Products" },
@@ -44,6 +47,91 @@ const HEADER_LINKS = [
   { id: "helpline", label: "Helpline" },
 ];
 
+const EMPLOYEES_SEED = [
+  {
+    id: "ADM-0001",
+    name: "Admin",
+    role: "admin",
+    title: "Administrator",
+    station: "Office / Admin",
+    pin: "1124",
+    photoUrl: "",
+  },
+  {
+    id: "EMP-1001",
+    name: "Employee 1",
+    role: "cashier",
+    title: "Cashier",
+    station: "Register 1",
+    pin: "1001",
+    photoUrl: "",
+  },
+  {
+    id: "EMP-1002",
+    name: "Employee 2",
+    role: "cashier",
+    title: "Cashier",
+    station: "Register 2",
+    pin: "1002",
+    photoUrl: "",
+  },
+  {
+    id: "EMP-1003",
+    name: "Employee 3",
+    role: "cashier",
+    title: "Cashier",
+    station: "Register 3",
+    pin: "1003",
+    photoUrl: "",
+  },
+  {
+    id: "EMP-1004",
+    name: "Employee 4",
+    role: "cashier",
+    title: "Cashier",
+    station: "Register 4",
+    pin: "1004",
+    photoUrl: "",
+  },
+  {
+    id: "EMP-1005",
+    name: "Employee 5",
+    role: "cashier",
+    title: "Cashier",
+    station: "Register 5",
+    pin: "1005",
+    photoUrl: "",
+  },
+  {
+    id: "EMP-1006",
+    name: "Employee 6",
+    role: "cashier",
+    title: "Cashier",
+    station: "Register 6",
+    pin: "1006",
+    photoUrl: "",
+  },
+  {
+    id: "EMP-1007",
+    name: "Employee 7",
+    role: "cashier",
+    title: "Cashier",
+    station: "Register 7",
+    pin: "1007",
+    photoUrl: "",
+  },
+];
+
+const RECHARGE_CATALOG = [
+  { id: "boss-revolution", name: "Boss Revolution (International Calling)" },
+  { id: "international-topup", name: "International Mobile Top-Up" },
+  { id: "gift-card", name: "Gift Card / Store Credit" },
+  { id: "prepaid-card", name: "Prepaid / Reload Card" },
+];
+
+/** One icon per login tile — animals & plants (no people icons) */
+const EMPLOYEE_EMOJIS = ["🌳", "🦊", "🌻", "🐢", "🦋", "🌵", "🦉", "🍀"];
+
 const categoryMix = [
   { name: "Beverages", value: 4200 },
   { name: "Snacks", value: 3100 },
@@ -53,7 +141,7 @@ const categoryMix = [
 ];
 
 function App() {
-  const [activePage, setActivePage] = useState("pos");
+  const [activePage, setActivePage] = useState("login");
   const [query, setQuery] = useState("");
   const [role, setRole] = useState("cashier");
   const [discount, setDiscount] = useState(0);
@@ -80,6 +168,24 @@ function App() {
   const [adminPinError, setAdminPinError] = useState("");
   /** 0 = off; 1–4 = clickable prototype steps on POS */
   const [prototypeStep, setPrototypeStep] = useState(0);
+  const [sessionUser, setSessionUser] = useState(null);
+  const [loginTarget, setLoginTarget] = useState(null);
+  const [loginPin, setLoginPin] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [lastLoginById, setLastLoginById] = useState(() => {
+    try {
+      const raw = localStorage.getItem("gcpos_lastLoginByEmployeeId");
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [couponType, setCouponType] = useState(null); // store | telemarketing | other
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState(null); // { type, code }
+  const [rechargeType, setRechargeType] = useState(RECHARGE_CATALOG[0]?.id ?? "");
+  const [rechargeValue, setRechargeValue] = useState("");
+  const [rechargeCustomerRef, setRechargeCustomerRef] = useState("");
 
   useEffect(() => {
     const onKey = (e) => {
@@ -87,6 +193,9 @@ function App() {
         setModal(null);
         setAdminPin("");
         setAdminPinError("");
+        setLoginTarget(null);
+        setLoginPin("");
+        setLoginError("");
       }
     };
     window.addEventListener("keydown", onKey);
@@ -113,6 +222,94 @@ function App() {
       return;
     }
     setAdminPinError("Incorrect PIN. Please enter correct admin PIN.");
+  };
+
+  const formatLastLogin = (iso) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString();
+  };
+
+  const startLogin = (emp) => {
+    setLoginTarget(emp);
+    setLoginPin("");
+    setLoginError("");
+    setModal("loginPin");
+  };
+
+  const finalizeLogin = () => {
+    if (!loginTarget) return;
+    if ((loginPin || "").trim() !== String(loginTarget.pin)) {
+      setLoginError("Incorrect PIN. Please try again.");
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const nextLast = { ...lastLoginById, [loginTarget.id]: nowIso };
+    setLastLoginById(nextLast);
+    try {
+      localStorage.setItem("gcpos_lastLoginByEmployeeId", JSON.stringify(nextLast));
+    } catch {
+      // ignore
+    }
+
+    setSessionUser({
+      id: loginTarget.id,
+      name: loginTarget.name,
+      role: loginTarget.role,
+      title: loginTarget.title,
+      station: loginTarget.station,
+      photoUrl: loginTarget.photoUrl,
+      loginAt: nowIso,
+    });
+    setRole(loginTarget.role);
+    setModal(null);
+    setLoginTarget(null);
+    setLoginPin("");
+    setLoginError("");
+    setActivePage(loginTarget.role === "admin" ? "dashboard" : "pos");
+  };
+
+  const logout = () => {
+    setSessionUser(null);
+    setRole("cashier");
+    setActivePage("login");
+    setCart([]);
+    setDiscount(0);
+    setVoucherCode("");
+    setKeypadBuffer("");
+    setAppliedCoupon(null);
+    setCouponType(null);
+    setCouponCode("");
+    setPrototypeStep(0);
+  };
+
+  const openCouponChooser = () => {
+    setCouponType(null);
+    setCouponCode("");
+    setModal("couponChooser");
+  };
+
+  const beginCouponEntry = (type) => {
+    setCouponType(type);
+    setCouponCode("");
+    setModal("couponEnter");
+  };
+
+  const applyCoupon = () => {
+    if (!couponType) return;
+    const code = couponCode.trim();
+    if (!code) return;
+    setAppliedCoupon({ type: couponType, code });
+    setModal(null);
+  };
+
+  const openRecharge = () => {
+    setRechargeType(RECHARGE_CATALOG[0]?.id ?? "");
+    setRechargeValue("");
+    setRechargeCustomerRef("");
+    setModal("recharge");
   };
 
   const filteredProducts = useMemo(() => {
@@ -260,32 +457,61 @@ function App() {
     <div className="app">
       <header className="header">
         <div className="brand">
-          <h1>GreenCart POS</h1>
+          <h1>{STORE_NAME}</h1>
           <p>Supermarket · C-store style terminal</p>
-          <div className="header-role-row" aria-label="Session role">
-            <span className="header-role-label">Role</span>
-            <button
-              type="button"
-              className={`header-role-btn ${role === "admin" ? "on" : ""}`}
-              onClick={openAdminPinModal}
-            >
-              Admin
-            </button>
-            <button
-              type="button"
-              className={`header-role-btn ${role === "cashier" ? "on" : ""}`}
-              onClick={() => {
-                setRole("cashier");
-                setActivePage("pos");
-                setModal("cashier");
-              }}
-            >
-              Cashier
-            </button>
-          </div>
+          {sessionUser ? (
+            <div className="header-session-row" aria-label="Session">
+              <div className="header-session-left">
+                <span className="header-role-label">Signed in</span>
+                <span className="header-session-meta">
+                  {sessionUser.name} · {sessionUser.title} · {sessionUser.station}
+                </span>
+              </div>
+              <div className="header-session-right">
+                <div className="session-chip" title={`${sessionUser.name} (${sessionUser.id})`}>
+                  <div className="avatar">
+                    {sessionUser.photoUrl ? (
+                      <img src={sessionUser.photoUrl} alt={`${sessionUser.name} avatar`} />
+                    ) : (
+                      <span>{(sessionUser.name || "U").slice(0, 1).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div className="session-chip-text">
+                    <strong>{sessionUser.id}</strong>
+                    <span className="muted small">
+                      Last login: {formatLastLogin(lastLoginById[sessionUser.id])}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className={`header-role-btn ${sessionUser.role === "admin" ? "on" : ""}`}
+                  onClick={() => {
+                    if (sessionUser.role === "admin") {
+                      setModal("admin");
+                    } else {
+                      setModal("cashier");
+                    }
+                  }}
+                >
+                  {sessionUser.role === "admin" ? "Admin" : "Employee"}
+                </button>
+                <button type="button" className="header-role-btn" onClick={logout}>
+                  Logout
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="header-session-row" aria-label="Not signed in">
+              <span className="header-role-label">Status</span>
+              <span className="header-session-meta">Please select an employee to start POS.</span>
+            </div>
+          )}
         </div>
         <nav className="header-nav scroll-nav" aria-label="Main">
-          {visibleNav.map((page) => (
+          {visibleNav
+            .filter((p) => (sessionUser ? p.id !== "login" : p.id === "login"))
+            .map((page) => (
             <button
               key={page.id}
               type="button"
@@ -311,8 +537,50 @@ function App() {
       </header>
 
       <main className="main">
+        {activePage === "login" && (
+          <section className="login-screen">
+            <div className="login-hero">
+              <h2 className="store-title">{STORE_NAME}</h2>
+              <p className="muted">
+                When POS is turned on, select an employee below to sign in quickly.
+              </p>
+            </div>
+
+            <div className="login-grid" aria-label="Employee login tiles">
+              {EMPLOYEES_SEED.map((emp, idx) => (
+                <button
+                  key={emp.id}
+                  type="button"
+                  className={`emp-tile ${emp.role === "admin" ? "admin" : ""} ${
+                    idx % 3 === 0 ? "size-xl" : idx % 3 === 1 ? "size-lg" : "size-md"
+                  }`}
+                  onClick={() => startLogin(emp)}
+                >
+                  <div className="emp-tile-top">
+                    <div className="emp-left">
+                      <span className="emp-emoji" aria-hidden="true">
+                        {EMPLOYEE_EMOJIS[idx % EMPLOYEE_EMOJIS.length]}
+                      </span>
+                      <strong className="emp-name">{emp.name}</strong>
+                    </div>
+                    <span className="emp-id">{emp.id}</span>
+                  </div>
+                  <div className="emp-tile-mid">
+                    <span className="pill">{emp.title}</span>
+                    <span className="emp-station muted small">{emp.station}</span>
+                  </div>
+                  <div className="emp-tile-bottom">
+                    <span className="muted small">Last login</span>
+                    <strong className="emp-last">{formatLastLogin(lastLoginById[emp.id])}</strong>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* ——— POS TERMINAL (7-Eleven / QT–style: categories + tiles + cart + keypad) ——— */}
-        {activePage === "pos" && (
+        {activePage === "pos" && sessionUser && (
           <section className="pos-terminal">
             {prototypeStep > 0 && (
               <div className="prototype-banner" role="status">
@@ -432,6 +700,27 @@ function App() {
                 <h3>Current sale</h3>
                 <span className="reg-badge">Register 1</span>
               </div>
+              <div className="pos-top-actions">
+                <button type="button" className="ghost-btn" onClick={openCouponChooser}>
+                  Coupons
+                </button>
+                <button type="button" className="ghost-btn" onClick={openRecharge}>
+                  Recharge / International
+                </button>
+              </div>
+              {appliedCoupon && (
+                <div className="coupon-chip" role="status">
+                  <div>
+                    <strong>Coupon applied</strong>
+                    <div className="muted small">
+                      {appliedCoupon.type} · <code>{appliedCoupon.code}</code>
+                    </div>
+                  </div>
+                  <button type="button" className="header-link-btn" onClick={() => setAppliedCoupon(null)}>
+                    Remove
+                  </button>
+                </div>
+              )}
               <ul className="list cart-list pos-cart-list">
                 {cart.length === 0 ? (
                   <li className="muted">No items — tap a tile or scan.</li>
@@ -793,6 +1082,23 @@ function App() {
               Each role maps to stations: front register, back receiving, delivery staging,
               admin. Tasks roll up to daily ops.
             </p>
+            <div className="sub-panel employee-tools">
+              <div className="panel-title">
+                <h4>Employee tools</h4>
+                <div className="actions">
+                  <button type="button" onClick={openRecharge}>
+                    Recharge / International cards
+                  </button>
+                  <button type="button" onClick={openCouponChooser}>
+                    Coupons
+                  </button>
+                </div>
+              </div>
+              <p className="muted small">
+                Add recharge interactions (example: Boss Revolution cards, international top-up) and coupons
+                to support fast checkout.
+              </p>
+            </div>
             <div className="staff-grid">
               {staffSeed.map((s) => (
                 <article key={s.id} className="staff-card">
@@ -936,6 +1242,12 @@ function App() {
                 <button type="button">Bank deposit slip</button>
                 <button type="button">Export GL / CSV</button>
                 <button type="button">Lock registers</button>
+                <button type="button" onClick={openRecharge}>
+                  Recharge / International cards
+                </button>
+                <button type="button" onClick={openCouponChooser}>
+                  Coupons
+                </button>
               </div>
             </article>
           </section>
@@ -1116,6 +1428,39 @@ function App() {
                 <strong>wireframes</strong>, and a <strong>clickable prototype</strong> path aligned
                 with coursework / team planning expectations.
               </p>
+            </article>
+
+            <article className="panel">
+              <h3>Team roles (project scope)</h3>
+              <div className="grid two-col">
+                <div className="sub-panel">
+                  <h4>Frontend Developers</h4>
+                  <p className="muted small">Responsibilities</p>
+                  <ul className="formal-list">
+                    <li>POS interface</li>
+                    <li>Dashboard</li>
+                    <li>Product management UI</li>
+                  </ul>
+                  <p className="muted small" style={{ marginTop: "0.75rem" }}>
+                    Key pages
+                  </p>
+                  <ul className="formal-list">
+                    <li>Login</li>
+                    <li>Product management</li>
+                    <li>Checkout screen</li>
+                    <li>Sales dashboard</li>
+                  </ul>
+                </div>
+                <div className="sub-panel">
+                  <h4>UI/UX Designer</h4>
+                  <p className="muted small">Responsibilities</p>
+                  <ul className="formal-list">
+                    <li>Design cashier-friendly interface</li>
+                    <li>Create layout wireframes</li>
+                    <li>Optimize workflow for fast checkout</li>
+                  </ul>
+                </div>
+              </div>
             </article>
 
             <article className="panel">
@@ -1424,6 +1769,144 @@ function App() {
           <p className="muted small">
             Use <strong>POS Terminal</strong> for checkout; <strong>Planning &amp; UX</strong> →
             Clickable prototype for the guided journey.
+          </p>
+        </InfoModal>
+      )}
+
+      {modal === "loginPin" && (
+        <InfoModal
+          title={`Login — ${loginTarget ? `${loginTarget.name} (${loginTarget.id})` : "Employee"}`}
+          onClose={() => {
+            setModal(null);
+            setLoginTarget(null);
+            setLoginPin("");
+            setLoginError("");
+          }}
+        >
+          <p className="formal-p">
+            Enter PIN to sign in. Demo pins: Admin <strong>1124</strong>, employees{" "}
+            <strong>1001–1007</strong>.
+          </p>
+          <label>
+            PIN
+            <input
+              type="password"
+              className="pin-input"
+              value={loginPin}
+              onChange={(e) => {
+                setLoginPin(e.target.value);
+                setLoginError("");
+              }}
+              onKeyDown={(e) => e.key === "Enter" && finalizeLogin()}
+              placeholder="Enter PIN"
+              autoFocus
+            />
+          </label>
+          {loginError && <p className="pin-error">{loginError}</p>}
+          <div className="actions">
+            <button type="button" onClick={finalizeLogin}>
+              Sign in
+            </button>
+          </div>
+        </InfoModal>
+      )}
+
+      {modal === "couponChooser" && (
+        <InfoModal title="Coupons" onClose={() => setModal(null)}>
+          <p className="formal-p">
+            Choose coupon type. This supports store coupons, telemarketing coupons, or other promotions.
+          </p>
+          <div className="actions">
+            <button type="button" onClick={() => beginCouponEntry("store")}>
+              Store coupon
+            </button>
+            <button type="button" onClick={() => beginCouponEntry("telemarketing")}>
+              Telemarketing coupon
+            </button>
+            <button type="button" onClick={() => beginCouponEntry("other")}>
+              Other coupon
+            </button>
+          </div>
+          {appliedCoupon && (
+            <p className="muted small" style={{ marginTop: "0.75rem" }}>
+              Currently applied: <strong>{appliedCoupon.type}</strong> · <code>{appliedCoupon.code}</code>
+            </p>
+          )}
+        </InfoModal>
+      )}
+
+      {modal === "couponEnter" && (
+        <InfoModal
+          title={`Enter coupon${couponType ? ` — ${couponType}` : ""}`}
+          onClose={() => setModal(null)}
+        >
+          <label>
+            Coupon code
+            <input
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && applyCoupon()}
+              placeholder="Scan / type coupon"
+              autoFocus
+            />
+          </label>
+          <div className="actions">
+            <button type="button" onClick={applyCoupon}>
+              Apply
+            </button>
+            <button type="button" className="ghost-btn" onClick={() => setModal("couponChooser")}>
+              Back
+            </button>
+          </div>
+        </InfoModal>
+      )}
+
+      {modal === "recharge" && (
+        <InfoModal title="Recharge / International" onClose={() => setModal(null)}>
+          <p className="formal-p">
+            Quick checkout add-on for recharges and international calling/top-up cards (example: Boss
+            Revolution).
+          </p>
+          <label>
+            Recharge type
+            <select value={rechargeType} onChange={(e) => setRechargeType(e.target.value)}>
+              {RECHARGE_CATALOG.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="grid two-col">
+            <label>
+              Amount
+              <input
+                inputMode="decimal"
+                placeholder="e.g. 10, 20, 50"
+                value={rechargeValue}
+                onChange={(e) => setRechargeValue(e.target.value)}
+              />
+            </label>
+            <label>
+              Customer reference
+              <input
+                placeholder="Phone / account / card #"
+                value={rechargeCustomerRef}
+                onChange={(e) => setRechargeCustomerRef(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className="actions">
+            <button
+              type="button"
+              onClick={() => setModal(null)}
+              disabled={!rechargeValue.trim() || !rechargeCustomerRef.trim()}
+            >
+              Confirm (demo)
+            </button>
+          </div>
+          <p className="muted small">
+            UI-only: in a full system this would call a provider API and print a receipt.
           </p>
         </InfoModal>
       )}
